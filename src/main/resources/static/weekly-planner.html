@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>周度目标智能规划</title>
+  <style>
+    body { font-family: "微软雅黑", Arial, sans-serif; background: #f5f6fa; }
+    .container { max-width: 700px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #eee; padding: 32px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    th, td { border: 1px solid #eee; padding: 8px; text-align: center; }
+    th { background: #f0f4fa; }
+    input[type="text"], input[type="number"], select { width: 95%; font-size: 15px; padding: 4px; border-radius: 4px; border: 1px solid #ddd; }
+    button { padding: 8px 20px; font-size: 15px; background: #4f8cff; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; }
+    button:disabled { background: #b3d1ff; }
+    .result { margin-top: 32px; background: #f7f7f7; padding: 16px; border-radius: 4px; min-height: 100px; white-space: pre-line; }
+    h2, h3 { color: #333; }
+    .del-btn { background: #ff5c5c; color: #fff; padding: 4px 12px; font-size: 13px; }
+    .del-btn:disabled { background: #ffd1d1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>周度目标输入</h2>
+    <table id="goalTable">
+      <thead>
+        <tr>
+          <th>目标内容</th>
+          <th>优先级</th>
+          <th>预计耗时(小时)</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="goalTbody">
+      </tbody>
+    </table>
+    <button id="addGoalBtn" type="button">添加目标</button>
+    <button id="submitBtn">生成今日规划</button>
+    <div class="result" id="result"></div>
+  </div>
+  <script>
+    const tbody = document.getElementById('goalTbody');
+    const addBtn = document.getElementById('addGoalBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const resultDiv = document.getElementById('result');
+
+    function createRow(content = '', priority = '重要且紧急', time = '') {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" placeholder="请输入目标" value="${content}" /></td>
+        <td>
+          <select class="priority-select">
+            <option value="重要且紧急" style="color:#e74c3c;">重要且紧急</option>
+            <option value="重要不紧急" style="color:#f39c12;">重要不紧急</option>
+            <option value="不重要但紧急" style="color:#3498db;">不重要但紧急</option>
+            <option value="不重要不紧急" style="color:#888;">不重要不紧急</option>
+          </select>
+        </td>
+        <td><input type="number" min="0" step="0.5" placeholder="小时" value="${time}" /></td>
+        <td><button class="del-btn" type="button">删除</button></td>
+      `;
+      // 设置默认选中
+      tr.children[1].children[0].value = priority;
+      tr.querySelector('.del-btn').onclick = function() {
+        tbody.removeChild(tr);
+        updateDelBtnState();
+      };
+      // 设置下拉框颜色
+      const select = tr.querySelector('.priority-select');
+      select.onchange = function() {
+        setPriorityColor(select);
+      };
+      setPriorityColor(select);
+      return tr;
+    }
+
+    function setPriorityColor(select) {
+      const colorMap = {
+        '重要且紧急': '#e74c3c',
+        '重要不紧急': '#f39c12',
+        '不重要但紧急': '#3498db',
+        '不重要不紧急': '#888'
+      };
+      select.style.color = colorMap[select.value] || '#333';
+    }
+
+    function updateDelBtnState() {
+      // 至少保留一行
+      const delBtns = tbody.querySelectorAll('.del-btn');
+      delBtns.forEach(btn => btn.disabled = delBtns.length === 1);
+    }
+
+    addBtn.onclick = function() {
+      tbody.appendChild(createRow());
+      updateDelBtnState();
+    };
+
+    // 初始化一行
+    tbody.appendChild(createRow());
+    updateDelBtnState();
+
+    submitBtn.onclick = async function() {
+      const rows = Array.from(tbody.children);
+      const goals = rows.map(tr => {
+        const tds = tr.children;
+        return {
+          content: tds[0].children[0].value.trim(),
+          priority: tds[1].children[0].value,
+          time: tds[2].children[0].value.trim()
+        };
+      }).filter(g => g.content);
+      if (goals.length === 0) {
+        resultDiv.textContent = "请至少填写一个目标内容！";
+        return;
+      }
+      submitBtn.disabled = true;
+      resultDiv.textContent = "规划中，请稍候...";
+      try {
+        // 结构化数据序列化为字符串
+        const query = JSON.stringify(goals);
+        const resp = await fetch(`/mcpTest/simple/chat?query=${encodeURIComponent(query)}`);
+        if (!resp.ok) throw new Error("网络错误");
+        const text = await resp.text();
+        resultDiv.textContent = text;
+      } catch (e) {
+        resultDiv.textContent = "请求失败，请稍后重试。";
+      }
+      submitBtn.disabled = false;
+    }
+  </script>
+</body>
+</html>
